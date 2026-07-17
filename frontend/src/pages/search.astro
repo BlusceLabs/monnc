@@ -1,0 +1,220 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import Grid from '../components/Grid.astro';
+import SearchBar from '../components/SearchBar.svelte';
+import { tmdb } from '../lib/tmdb';
+import { hasCredentials } from '../lib/config';
+
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+
+// Map tabs directly to their fetch functions for a clean data pipeline.
+const TABS = [
+  { key: 'all', label: 'All', kind: 'multi', fetcher: tmdb.searchMulti },
+  { key: 'movie', label: 'Movies', kind: 'movie', fetcher: tmdb.searchMovie },
+  { key: 'tv', label: 'TV', kind: 'tv', fetcher: tmdb.searchTv },
+  { key: 'person', label: 'People', kind: 'person', fetcher: tmdb.searchPerson },
+];
+
+// Validate tab input, defaulting to 'all'.
+const rawTab = Astro.url.searchParams.get('tab');
+const currentTab = TABS.find((t) => t.key === rawTab) || TABS[0];
+const tab = currentTab.key;
+
+let results = [];
+let error = null;
+let total = 0;
+
+if (q && hasCredentials) {
+  try {
+    const data = await currentTab.fetcher(q);
+    results = data.results || [];
+    total = data.total_results || results.length;
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+}
+
+// Grid kind (the 'all' tab mixes types, so each card falls back on its own media_type).
+const gridKind = tab === 'person' ? 'person' : (tab === 'tv' ? 'tv' : 'movie');
+
+const pageTitle = q ? `Search: ${q}` : 'Search';
+const headerTitle = q ? `Results for “${q}”` : 'Search';
+const headerSub = !q
+  ? 'Find movies, series and people.'
+  : `${total ? total.toLocaleString() : results.length} result${results.length === 1 ? '' : 's'}`;
+---
+
+<BaseLayout title={pageTitle}>
+  <PageHeader eyebrow="Search" title={headerTitle} sub={headerSub}>
+    <div class="search-wrap">
+      <SearchBar client:idle initial={q} />
+    </div>
+  </PageHeader>
+
+  <div class="container">
+    {q && (
+      <nav class="tabs" aria-label="Search filters">
+        {TABS.map((t) => (
+          <a
+            class:active={t.key === tab}
+            href={`/search?q=${encodeURIComponent(q)}&tab=${t.key}`}
+            data-kind={t.kind}
+            aria-current={t.key === tab ? 'page' : undefined}
+          >
+            {t.label}
+          </a>
+        ))}
+      </nav>
+    )}
+
+    {error && (
+      <div class="empty error-message">
+        Search failed: {error}
+      </div>
+    )}
+
+    {!q && !error && (
+      <div class="empty hero-empty">
+        <span class="empty-glyph" aria-hidden="true">🔎</span>
+        <p>Type a title or name above to start searching.</p>
+      </div>
+    )}
+
+    <div id="results">
+      {q && !error && results.length === 0 && (
+        <div class="empty">
+          <p>No {currentTab.label.toLowerCase()} results found for “{q}”.</p>
+          <p class="muted">Try a different spelling or broaden your search.</p>
+        </div>
+      )}
+
+      {q && !error && results.length > 0 && (
+        <Grid
+          items={results}
+          kind={gridKind}
+          empty={`No ${currentTab.label.toLowerCase()} results found for “${q}”.`}
+        />
+      )}
+    </div>
+  </div>
+
+  <script>
+    import { API_BASE } from '../lib/config';
+
+    const IMG = 'https://image.tmdb.org/t/p';
+    const abs = (p) => typeof p === 'string' && (p.startsWith('http://') || p.startsWith('https://'));
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+
+    function thumb(p) {
+      if (!p) return '';
+      return abs(p) ? p : `${IMG}/original${p}`;
+    }
+    function typeOf(it) {
+      if (it.media_type === 'person') return 'person';
+      if (it.media_type === 'tv') return 'tv';
+      if (it.media_type === 'movie') return 'movie';
+      if (it.first_air_date || (it.name && !it.title)) return 'tv';
+      return 'movie';
+    }
+    function hrefFor(it) {
+      const t = typeOf(it);
+      return t === 'person' ? `/person/${it.id}` : `/details/${t}/${it.id}`;
+    }
+    function label(it) { return it.title || it.name || 'Untitled'; }
+
+    function cardHTML(it) {
+      const t = typeOf(it);
+      const badge = t === 'person' ? 'Person' : (t === 'tv' ? 'TV' : 'Film');
+      const p = thumb(it.poster_path || it.profile_path || it.backdrop_path);
+      return `<a class="r-card" href="${hrefFor(it)}">
+        <div class="r-poster">
+          <img src="${thumb(p)}" alt="" loading="lazy" />
+          <span class="r-badge">${badge}</span>
+        </div>
+        <div class="r-meta"><span class="r-title">${esc(label(it))}</span></div>
+      </a>`;
+    }
+
+    function renderResults(kind, items, q) {
+      const box = document.getElementById('results');
+      if (!box) return;
+      if (!items || !items.length) {
+        box.innerHTML = `<div class="empty"><p>No ${kind.toLowerCase()} results found for “${esc(q)}”.</p><p class="muted">Try a different spelling or broaden your search.</p></div>`;
+        return;
+      }
+      const gridClass = kind === 'person' ? 'media-grid people-grid' : 'media-grid';
+      box.innerHTML = `<div class="${gridClass}">${items.map(cardHTML).join('')}</div>`;
+    }
+
+    const tabs = Array.from(document.querySelectorAll('.tabs a'));
+    tabs.forEach((a) => {
+      a.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const kind = a.dataset.kind;
+        const q = new URLSearchParams(location.search).get('q') || '';
+        tabs.forEach((t) => t.classList.remove('active'));
+        a.classList.add('active');
+        history.pushState(null, '', `/search?q=${encodeURIComponent(q)}&tab=${a.getAttribute('href').split('tab=')[1]}`);
+        try {
+          const res = await fetch(`${API_BASE}/api/tmdb/search/${kind}?query=${encodeURIComponent(q)}&page=1`);
+          const data = await res.json();
+          renderResults(kind, data.results || [], q);
+        } catch (err) {
+          const box = document.getElementById('results');
+          if (box) box.innerHTML = `<div class="empty error-message">Search failed: ${esc(err.message || err)}</div>`;
+        }
+      });
+    });
+  </script>
+</BaseLayout>
+
+<style>
+  .search-wrap {
+    max-width: 560px;
+    margin: 16px 0 8px;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 28px;
+  }
+
+  .tabs a {
+    padding: 10px 16px;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    font-weight: 500;
+    transition: color 0.2s ease, border-color 0.2s ease;
+    text-decoration: none;
+  }
+
+  .tabs a:hover {
+    color: var(--text);
+  }
+
+  .tabs a.active {
+    color: var(--mustard);
+    border-bottom-color: var(--mustard);
+  }
+
+  .error-message {
+    color: var(--red-risk, #e07a5f);
+  }
+
+  .hero-empty {
+    padding: 72px 24px;
+  }
+
+  .empty-glyph {
+    font-size: 2.4rem;
+    display: block;
+    margin-bottom: 12px;
+    opacity: 0.8;
+  }
+</style>

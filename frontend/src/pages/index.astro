@@ -1,0 +1,131 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SearchBar from '../components/SearchBar.svelte';
+import { SITE } from '../lib/config';
+import { tmdb } from '../lib/tmdb';
+import { hasCredentials } from '../lib/config';
+import { backdrop } from '../lib/image';
+
+// Pull the day's top trending title to use as the hero backdrop.
+let heroMedia = null, heroError = null;
+if (hasCredentials) {
+  try {
+    const data = await tmdb.trendingAll('day');
+    heroMedia = (data.results || []).find(
+      (item) => item.backdrop_path || item.poster_path
+    ) || null;
+  } catch (err) {
+    heroError = err instanceof Error ? err.message : String(err);
+  }
+}
+const heroImg = heroMedia ? backdrop(heroMedia.backdrop_path, 'original') : null;
+const heroTitle = heroMedia?.title || heroMedia?.name || '';
+const heroType = heroMedia?.media_type || (heroMedia?.first_air_date ? 'tv' : 'movie');
+---
+
+<BaseLayout title={SITE.tagline} description={SITE.tagline} nav={false} footer={false}>
+  <section class="hero">
+    {heroImg && (
+      <>
+        <div class="hero-bg" style={`background-image:url(${heroImg})`} aria-hidden="true"></div>
+        <div class="hero-scrim" aria-hidden="true"></div>
+      </>
+    )}
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="container hero-inner">
+      <span class="eyebrow">monnc · streaming discovery</span>
+      <h1>A warmer way to<br />discover film &amp; television.</h1>
+      <p class="lede">
+        Search a title, dive into a rail, and press play.
+      </p>
+
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="/home">▶ Enter monnc</a>
+        <a class="btn btn-ghost" href="/movies">Browse movies</a>
+      </div>
+
+      <div class="hero-search">
+        <SearchBar client:idle />
+      </div>
+
+      {heroMedia && (
+        <a class="hero-featured" href={`/details/${heroType}/${heroMedia.id}`}>
+          <span class="hero-featured-label">Trending today</span>
+          <span class="hero-featured-title">{heroTitle}</span>
+          <span class="hero-featured-cta">View details →</span>
+        </a>
+      )}
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* ---- Hero --------------------------------------------------------- */
+  .hero {
+    position: relative;
+    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin-top: calc(-1 * var(--nav-h));
+    display: flex;
+    align-items: center;
+    padding: 0;
+  }
+  .hero-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center 20%;
+    transform: scale(1.05);
+    animation: hero-zoom 18s ease-out forwards;
+  }
+  @keyframes hero-zoom { to { transform: scale(1); } }
+  .hero-scrim {
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(90deg, rgba(16,17,19,0.96) 0%, rgba(16,17,19,0.7) 42%, rgba(16,17,19,0.35) 100%),
+      linear-gradient(0deg, var(--charcoal) 4%, rgba(16,17,19,0.2) 60%);
+  }
+  .hero-glow {
+    position: absolute;
+    inset: -20% -10% auto -10%;
+    height: 80%;
+    background:
+      radial-gradient(60% 80% at 75% 0%, rgba(230, 179, 37, 0.20), transparent 60%),
+      radial-gradient(50% 70% at 15% 10%, rgba(43, 53, 45, 0.6), transparent 60%);
+    pointer-events: none;
+  }
+  .hero-featured {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 30px;
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    background: rgba(16,17,19,0.55);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    transition: border-color .2s, background .2s, transform .2s;
+  }
+  .hero-featured:hover { border-color: var(--mustard-deep); transform: translateY(-2px); }
+  .hero-featured-label {
+    text-transform: uppercase; letter-spacing: 0.14em;
+    font-size: 0.68rem; font-weight: 600; color: var(--mustard);
+  }
+  .hero-featured-title { font-weight: 600; font-size: 0.98rem; color: var(--text); }
+  .hero-featured-cta { color: var(--text-dim); font-size: 0.88rem; }
+  @media (max-width: 720px) {
+    .hero-scrim { background: linear-gradient(0deg, var(--charcoal) 10%, rgba(16,17,19,0.55) 70%, rgba(16,17,19,0.45)); }
+  }
+  .hero-inner { position: relative; z-index: 2; max-width: 760px; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 6vw, 4rem);
+    margin: 14px 0 18px;
+    letter-spacing: -0.02em;
+  }
+  .lede { font-size: 1.12rem; color: var(--text); opacity: 0.9; max-width: 56ch; margin: 0 0 28px; }
+  .hero-cta { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 32px; }
+  .hero-search { max-width: 560px; }
+</style>

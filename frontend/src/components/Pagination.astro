@@ -1,0 +1,30 @@
+---
+interface Props { page: number; totalPages: number; base: string; }
+const { page, totalPages, base } = Astro.props;
+const max = Math.min(totalPages, 500);
+const sep = base.includes('?') ? '&' : '?';
+const url = (p: number) => `${base}${sep}page=${p}`;
+const pages: number[] = [];
+const start = Math.max(1, page - 2);
+const end = Math.min(max, start + 4);
+for (let p = start; p <= end; p++) pages.push(p);
+---
+{max > 1 && (
+  <nav class="pager" aria-label="Pagination">
+    <a class={`pg ${page <= 1 ? 'disabled' : ''}`} href={page > 1 ? url(page - 1) : '#'} aria-label="Previous">‹ Prev</a>
+    {start > 1 && <><a class="pg" href={url(1)}>1</a><span class="gap">…</span></>}
+    {pages.map((p) => (
+      <a class={`pg ${p === page ? 'current' : ''}`} href={url(p)} aria-current={p === page ? 'page' : undefined}>{p}</a>
+    ))}
+    {end < max && <><span class="gap">…</span><a class="pg" href={url(max)}>{max}</a></>}
+    <a class={`pg ${page >= max ? 'disabled' : ''}`} href={page < max ? url(page + 1) : '#'} aria-label="Next">Next ›</a>
+  </nav>
+)}
+<style>
+  .pager { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
+  .pg { min-width: 42px; height: 42px; padding: 0 12px; display: grid; place-items: center; border-radius: var(--radius-sm); border: 1px solid var(--border); color: var(--text-dim); font-weight: 600; font-size: 0.9rem; }
+  .pg:hover { color: var(--text); border-color: var(--mustard-deep); }
+  .pg.current { background: var(--mustard); color: var(--charcoal-900); border-color: var(--mustard); }
+  .pg.disabled { opacity: 0.35; pointer-events: none; }
+  .gap { display: grid; place-items: center; color: var(--text-faint); padding: 0 4px; }
+</style>

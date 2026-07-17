@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import PageHeader from '../../../components/PageHeader.astro';
+import FilterTabs from '../../../components/FilterTabs.astro';
+import Grid from '../../../components/Grid.astro';
+import Pagination from '../../../components/Pagination.astro';
+import { tmdb } from '../../../lib/tmdb';
+import { hasCredentials } from '../../../lib/config';
+
+const { category } = Astro.params;
+const page = Number(Astro.url.searchParams.get('page') || '1');
+
+const catalog = {
+  popular: { label: 'Popular', fn: tmdb.moviesPopular },
+  top_rated: { label: 'Top Rated', fn: tmdb.moviesTopRated },
+  upcoming: { label: 'Upcoming', fn: tmdb.moviesUpcoming },
+  now_playing: { label: 'Now Playing', fn: tmdb.moviesNowPlaying },
+};
+const current = catalog[category];
+if (!current) return Astro.redirect('/movies');
+
+let data = { results: [], page: 1, total_pages: 1 }, error = null;
+if (hasCredentials) {
+  try { data = await current.fn(page); } catch (err) { error = err.message; }
+}
+const tabs = Object.entries(catalog).map(([key, v]) => ({
+  label: v.label, href: `/movies/browse/${key}`, active: key === category,
+}));
+---
+<BaseLayout title={`${current.label} Movies`}>
+  <PageHeader eyebrow="Movies" title={`${current.label} Movies`}>
+    <FilterTabs tabs={tabs} />
+  </PageHeader>
+  <div class="container section">
+    {error ? <div class="empty">{error}</div> : <Grid items={data.results} kind="movie" />}
+    <Pagination page={data.page} totalPages={data.total_pages} base={`/movies/browse/${category}`} />
+  </div>
+</BaseLayout>

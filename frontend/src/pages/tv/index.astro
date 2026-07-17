@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Rail from '../../components/Rail.astro';
+import { tmdb } from '../../lib/tmdb';
+import { hasCredentials } from '../../lib/config';
+
+let popular = [], topRated = [], onAir = [], airingToday = [], error = null;
+if (hasCredentials) {
+  try {
+    const [a, b, c, d] = await Promise.all([
+      tmdb.tvPopular(), tmdb.tvTopRated(), tmdb.tvOnTheAir(), tmdb.tvAiringToday(),
+    ]);
+    popular = a.results; topRated = b.results; onAir = c.results; airingToday = d.results;
+  } catch (err) { error = err.message; }
+}
+---
+<BaseLayout title="TV Shows" description="Browse popular, top rated and currently-airing series.">
+  <PageHeader eyebrow="Television" title="TV Shows" sub="Binge-worthy series, tonight’s premieres and the highest rated shows of all time." />
+  {error && <div class="container"><div class="empty">{error}</div></div>}
+  <Rail title="Airing today" items={airingToday} kind="tv" href="/tv/browse/airing_today" />
+  <Rail title="Popular" items={popular} kind="tv" href="/tv/browse/popular" />
+  <Rail title="On the air" items={onAir} kind="tv" href="/tv/browse/on_the_air" />
+  <Rail title="Top rated" items={topRated} kind="tv" href="/tv/browse/top_rated" />
+</BaseLayout>

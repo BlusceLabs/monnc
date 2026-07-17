@@ -1,0 +1,134 @@
+---
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import NotFound from '../../../components/NotFound.astro';
+import VideoPlayer from '../../../components/VideoPlayer.svelte';
+import MediaCarousel from '../../../components/MediaCarousel.svelte';
+import ScoreRing from '../../../components/ScoreRing.svelte';
+import { tmdb } from '../../../lib/tmdb';
+import { hasCredentials, API_BASE } from '../../../lib/config';
+import { backdrop, poster } from '../../../lib/image';
+import { mediaTitle, mediaDate, year, runtime } from '../../../lib/format';
+
+const { type, id } = Astro.params;
+let notFound = !(type === 'movie' || type === 'tv');
+
+let data = null, error = null;
+if (!notFound && hasCredentials) {
+  try { data = type === 'movie' ? await tmdb.movie(id) : await tmdb.tv(id); }
+  catch (err) { error = err.message; }
+}
+if (!data && !error) notFound = true;
+
+if (notFound) Astro.response.status = 404;
+
+const title = data ? mediaTitle(data) : '';
+const yr = data ? year(mediaDate(data)) : '';
+const genres = (data?.genres || []).map((g) => g.name).join(' · ');
+const meta = type === 'movie' ? runtime(data?.runtime) : `${data?.number_of_seasons || 0} seasons`;
+
+// Resolve a real playable source from the backend streaming pipeline
+// (111movies → bcdn), routed back through our own origin so the browser
+// never hits CORS/restriction walls. Falls back to open demos if the
+// backend has no source for this title.
+let streamUrl = null, streamError = null;
+let tracks = [];
+if (API_BASE) {
+  try {
+    const url = type === 'tv'
+      ? `${API_BASE}/api/stream/tv/${id}/1/1`
+      : `${API_BASE}/api/stream/movie/${id}`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const stream = await res.json();
+      if (stream.stream_url) {
+        // Route the source through the /px transcoding proxy. It inspects the
+        // codec and transcodes HEVC→H.264 on the fly, passing H.264 straight
+        // through — so every client plays natively, same-origin (no CORS).
+        streamUrl = `${API_BASE}/px?target=${encodeURIComponent(stream.stream_url)}`;
+        tracks = (stream.tracks || []).map((t) => ({
+          ...t,
+          src: t.src.startsWith('http') ? t.src : `${API_BASE}${t.src}`,
+        }));
+      }
+    } else if (res.status !== 404) {
+      streamError = `Stream backend responded ${res.status}`;
+    }
+  } catch (err) {
+    streamError = err.message;
+  }
+}
+
+const demoHls = 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
+const demoMp4 = 'https://storage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
+const source = streamUrl || (type === 'tv' ? demoHls : demoMp4);
+
+const recs = (data?.recommendations?.results || []).slice(0, 16);
+---
+{notFound ? (
+  <NotFound />
+) : (
+<BaseLayout title={`Watch · ${title}`} description={data?.overview}>
+  {error && <div class="container" style="padding-top:40px"><div class="empty">{error}</div></div>}
+  {data && (
+    <div class="theater">
+      <div class="container">
+        <a class="back" href={`/${type}/${id}`}>‹ Back to details</a>
+        <div class="stage">
+          <VideoPlayer
+            client:only="svelte"
+            src={source}
+            poster={backdrop(data.backdrop_path, 'original')}
+            title={title}
+            subtitle={[yr, genres].filter(Boolean).join('  ·  ')}
+            tracks={tracks}
+          />
+        </div>
+
+        <div class="watch-info">
+          <img class="mini-poster" src={poster(data.poster_path, 'original')} alt={title} />
+          <div class="wi-body">
+            <div class="spread">
+              <div>
+                <span class="eyebrow">{type === 'tv' ? 'Now streaming · Series' : 'Now streaming · Film'}</span>
+                <h1>{title} <span class="yr">{yr}</span></h1>
+                <p class="muted meta">{[meta, genres].filter(Boolean).join('  ·  ')}</p>
+              </div>
+              {data.vote_average ? <ScoreRing client:visible value={data.vote_average} size={58} /> : null}
+            </div>
+            <p class="overview">{data.overview}</p>
+            <div class="note">
+              <strong>Live pipeline.</strong> {streamUrl
+                ? 'Playback is streamed through the /px transcoding proxy (real 111movies source, HEVC→H.264 on the fly, same-origin).'
+                : 'No backend source was found for this title — showing an open sample stream.'}
+              {streamError && ` (backend: ${streamError})`}
+            </div>
+          </div>
+        </div>
+
+        {recs.length > 0 && (
+          <section class="section">
+            <div class="section-head"><h2>Up next</h2></div>
+            <MediaCarousel client:visible items={recs} kind={type} />
+          </section>
+        )}
+      </div>
+    </div>
+  )}
+
+  <style>
+    .theater { padding-top: 24px; }
+    .back { display: inline-block; color: var(--text-dim); margin-bottom: 16px; }
+    .back:hover { color: var(--mustard); }
+    .stage { max-width: 1040px; margin: 0 auto; }
+    .watch-info { max-width: 1040px; margin: 26px auto 0; display: grid; grid-template-columns: 132px 1fr; gap: 24px; align-items: start; }
+    .mini-poster { width: 132px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .wi-body h1 { font-size: clamp(1.5rem, 3vw, 2.1rem); margin: 6px 0 4px; }
+    .yr { color: var(--text-dim); font-weight: 400; font-size: 1.1rem; }
+    .meta { margin: 0 0 12px; }
+    .overview { max-width: 70ch; color: var(--text); opacity: 0.9; }
+    .note { margin-top: 16px; padding: 14px 16px; border-radius: var(--radius); background: var(--mustard-tint); border: 1px solid var(--mustard-deep); font-size: 0.9rem; color: var(--cactus-soft); }
+    .note code { color: var(--mustard-soft); }
+    @media (max-width: 720px) { .watch-info { grid-template-columns: 1fr; } .mini-poster { width: 110px; } }
+  </style>
+</BaseLayout>
+)}

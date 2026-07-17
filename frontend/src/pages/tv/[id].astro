@@ -1,0 +1,5 @@
+---
+// Canonical TV detail now lives at /details/tv/[id]; redirect the
+// legacy /tv/[id] URL so old links/deep-bookmarks keep working.
+const { id } = Astro.params;
+return Astro.redirect(`/details/tv/${id}`);

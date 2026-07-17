@@ -1,0 +1,5 @@
+---
+// Canonical movie detail now lives at /details/movie/[id]; redirect the
+// legacy /movies/[id] URL so old links/deep-bookmarks keep working.
+const { id } = Astro.params;
+return Astro.redirect(`/details/movie/${id}`);

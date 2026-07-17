@@ -1,0 +1,158 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import HeroBanner from '../components/HeroBanner.svelte';
+import Rail from '../components/Rail.astro';
+import { tmdb } from '../lib/tmdb';
+import { hasCredentials } from '../lib/config';
+
+let error = null;
+
+// Group lists in a dictionary for cleaner state management
+const content = {
+  trending: [],
+  popularMovies: [],
+  topRatedMovies: [],
+  upcoming: [],
+  popularTv: [],
+  topRatedTv: [],
+  onAir: [],
+  trendingPeople: [],
+  nowPlaying: []
+};
+
+if (hasCredentials) {
+  try {
+    const [
+      trending, popularMovies, topRatedMovies, upcoming,
+      popularTv, topRatedTv, onAir, trendingPeople, nowPlaying
+    ] = await Promise.all([
+      tmdb.trendingAll('week'), tmdb.moviesPopular(), tmdb.moviesTopRated(),
+      tmdb.moviesUpcoming(), tmdb.tvPopular(), tmdb.tvTopRated(),
+      tmdb.tvOnTheAir(), tmdb.trendingPeople('week'), tmdb.moviesNowPlaying()
+    ]);
+
+    content.trending = trending.results;
+    content.popularMovies = popularMovies.results;
+    content.topRatedMovies = topRatedMovies.results;
+    content.upcoming = upcoming.results;
+    content.popularTv = popularTv.results;
+    content.topRatedTv = topRatedTv.results;
+    content.onAir = onAir.results;
+    content.trendingPeople = trendingPeople.results;
+    content.nowPlaying = nowPlaying.results;
+  } catch (err) {
+    error = err instanceof Error ? err.message : String(err);
+  }
+}
+
+// Hero uses the week's trending titles as rotating backdrop images.
+const heroItems = (content.trending || [])
+  .filter((item) => item?.backdrop_path || item?.poster_path)
+  .slice(0, 6);
+
+// Configuration array ensures the template stays DRY (Don't Repeat Yourself)
+const rails = [
+  { title: "Popular Series", items: content.popularTv, kind: "tv", href: "/tv/browse/popular" },
+  { title: "Popular Movies", items: content.popularMovies, kind: "movie", href: "/movies/browse/popular" },
+  { title: "On The Air", items: content.onAir, kind: "tv", href: "/tv/browse/on_the_air" },
+  { title: "Top Rated Films", items: content.topRatedMovies, kind: "movie", href: "/movies/browse/top_rated" },
+  { title: "Top Rated Series", items: content.topRatedTv, kind: "tv", href: "/tv/browse/top_rated" },
+  { title: "People on Spotlight", items: content.trendingPeople, kind: "person", href: "/people" },
+  { title: "Coming Soon", items: content.upcoming, kind: "movie", href: "/movies/browse/upcoming" }
+];
+---
+
+<BaseLayout>
+  {!hasCredentials && (
+    <div class="container message-container">
+      <div class="empty">
+        <h2>Add your TMDB key to begin</h2>
+        <p class="muted">
+          Copy <code>.env.example</code> to <code>.env</code> and set <code>TMDB_ACCESS_TOKEN</code> (or <code>TMDB_API_KEY</code>), then restart the dev server.
+        </p>
+      </div>
+    </div>
+  )}
+
+  {error && (
+    <div class="container message-container">
+      <div class="empty">Couldn’t reach TMDB: {error}</div>
+    </div>
+  )}
+
+  {heroItems.length > 0 ? (
+    <HeroBanner client:load items={heroItems} />
+  ) : (
+    <section class="hero hero-static">
+      <div class="scrim"></div>
+      <div class="container hero-content">
+        <span class="eyebrow">monnc</span>
+        <h1>A warmer way to discover film & television.</h1>
+        <p class="lede">
+          Search a title, dive into a rail, and press play — streams are proxied straight through the backend.
+        </p>
+      </div>
+    </section>
+  )}
+
+  {/* Render active rails programmatically */}
+  {rails.map((rail) => (
+    rail.items?.length > 0 && (
+      <Rail 
+        title={rail.title} 
+        eyebrow={rail.eyebrow} 
+        items={rail.items} 
+        kind={rail.kind} 
+        href={rail.href} 
+      />
+    )
+  ))}
+</BaseLayout>
+
+<style>
+  .message-container {
+    padding-top: 40px;
+  }
+
+   .hero-static {
+    position: relative;
+    min-height: 78vh;
+    display: flex;
+    align-items: flex-end;
+    overflow: hidden;
+    background: radial-gradient(120% 120% at 80% 0%, rgba(230, 179, 37, 0.18), transparent 60%), 
+                var(--charcoal);
+  }
+
+  .hero-static .scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(16, 17, 19, 0.96) 0%, rgba(16, 17, 19, 0.6) 45%, rgba(16, 17, 19, 0.2) 100%),
+                linear-gradient(0deg, var(--charcoal) 2%, transparent 55%);
+  }
+
+  .hero-static .hero-content {
+    position: relative;
+    z-index: 2;
+    padding-bottom: 64px;
+    max-width: 640px;
+  }
+
+  .hero-static h1 {
+    font-size: clamp(2.2rem, 5vw, 3.6rem);
+    margin: 10px 0 12px;
+  }
+
+  .hero-static .lede {
+    color: var(--text);
+    opacity: 0.9;
+    font-size: 1.02rem;
+    max-width: 52ch;
+  }
+
+  @media (max-width: 720px) {
+    .hero-static {
+      min-height: 68vh;
+    }
+  }
+</style>

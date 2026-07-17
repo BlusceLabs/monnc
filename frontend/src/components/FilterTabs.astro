@@ -1,0 +1,13 @@
+---
+interface Tab { label: string; href: string; active: boolean; }
+interface Props { tabs: Tab[]; }
+const { tabs } = Astro.props;
+---
+<div class="tabs" role="tablist">
+  {tabs.map((t) => (
+    <a class={`chip ${t.active ? 'is-active' : ''}`} href={t.href} role="tab" aria-selected={t.active}>{t.label}</a>
+  ))}
+</div>
+<style>
+  .tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 18px; }
+</style>

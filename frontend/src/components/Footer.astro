@@ -1,0 +1,14 @@
+---
+import { SITE } from '../lib/config';
+const year = new Date().getFullYear();
+---
+<footer class="footer">
+  <div class="container foot-legal">
+    <span class="muted">© {year} {SITE.name}. For demo purposes.</span>
+    <span class="muted">Data & images provided by TMDB. This product uses the TMDB API but is not endorsed or certified by TMDB.</span>
+  </div>
+  <style>
+    .footer { margin-top: 64px; border-top: 1px solid var(--border); background: var(--charcoal-900); padding: 28px 0; }
+    .foot-legal { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; }
+  </style>
+</footer>

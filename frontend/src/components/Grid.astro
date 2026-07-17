@@ -1,0 +1,12 @@
+---
+import MediaCard from './MediaCard.svelte';
+interface Props { items: any[]; kind?: string | null; empty?: string; }
+const { items, kind = null, empty = 'Nothing to show here yet.' } = Astro.props;
+---
+{items && items.length ? (
+  <div class={kind === 'person' ? 'media-grid people-grid' : 'media-grid'}>
+    {items.map((item) => <MediaCard item={item} kind={kind} />)}
+  </div>
+) : (
+  <div class="empty">{empty}</div>
+)}

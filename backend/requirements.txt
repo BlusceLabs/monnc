@@ -1,0 +1,13 @@
+cryptography>=42.0.0
+scrapling>=0.3.0
+# scrapling's transitive deps (static + headless engines). Pinned explicitly
+# because a partial install can otherwise ship scrapling without them.
+curl-cffi>=0.7.0
+playwright>=1.40.0
+browserforge>=1.0.0
+msgspec>=0.18.0
+httpx[http2]>=0.27.0
+pytest>=8.0.0
+fastapi>=0.110.0
+uvicorn>=0.29.0
+python-dotenv>=1.0.0

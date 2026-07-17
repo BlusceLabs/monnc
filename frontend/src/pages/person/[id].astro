@@ -1,0 +1,104 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NotFound from '../../components/NotFound.astro';
+import { tmdb } from '../../lib/tmdb';
+import { hasCredentials } from '../../lib/config';
+import { profile, poster } from '../../lib/image';
+import { prettyDate } from '../../lib/format';
+
+const { id } = Astro.params;
+let p = null, error = null;
+if (hasCredentials) {
+  try { p = await tmdb.person(id); }
+  catch (err) { error = err.message; }
+}
+if (!p && !error) {
+  Astro.response.status = 404;
+}
+
+// Build a de-duplicated filmography from combined credits.
+const credits = p?.combined_credits || { cast: [], crew: [] };
+const seen = new Set();
+const filmography = [
+  ...(credits.cast || []).map((c) => ({ ...c, _role: c.character || '' })),
+  ...(credits.crew || []).map((c) => ({ ...c, _role: c.job || '' })),
+]
+  .filter((c) => c.id && c.media_type && (c.title || c.name))
+  .filter((c) => {
+    const k = `${c.media_type}-${c.id}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  })
+  .sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+const title = p?.name || 'Person';
+const born = p?.birthday ? prettyDate(p.birthday) : '';
+const died = p?.deathday ? prettyDate(p.deathday) : '';
+const photo = p?.profile ? profile(p.profile) : profile(null, 'original');
+---
+
+{
+  !p ? (
+    <NotFound />
+  ) : (
+    <BaseLayout title={title} description={p?.biography} backdrop={null}>
+      {error && <div class="container" style="padding-top:40px"><div class="empty">{error}</div></div>}
+      <section class="person container">
+        <div class="photo-col">
+          <img class="photo" src={photo} alt={title} />
+        </div>
+        <div class="info">
+          <h1>{title}</h1>
+          {p?.known_for_department && <p class="dept">{p.known_for_department}</p>}
+          <div class="facts">
+            {born && <span><strong>Born</strong> {born}{p?.place_of_birth ? `, ${p.place_of_birth}` : ''}</span>}
+            {died && <span><strong>Died</strong> {died}</span>}
+          </div>
+          {p?.biography && (
+            <>
+              <h3>Biography</h3>
+              <p class="bio">{p.biography}</p>
+            </>
+          )}
+        </div>
+      </section>
+
+      {filmography.length > 0 && (
+        <section class="section container">
+          <div class="section-head"><h2>Filmography</h2></div>
+          <div class="media-grid">
+            {filmography.map((c) => (
+              <a class="f-card" href={`/details/${c.media_type}/${c.id}`}>
+                <div class="f-poster">
+                  <img src={poster(c.poster_path, 'w342')} alt={c.title || c.name} loading="lazy" />
+                </div>
+                <div class="f-meta">
+                  <span class="f-title">{(c.title || c.name)}</span>
+                  {c._role && <span class="f-sub">{c._role}</span>}
+                </div>
+              </a>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <style>
+        .person { display: grid; grid-template-columns: 300px 1fr; gap: 40px; padding-top: 48px; align-items: start; }
+        .photo { width: 100%; border-radius: var(--radius-lg); border: 1px solid var(--border); box-shadow: var(--shadow-1); }
+        .info h1 { font-size: clamp(1.8rem, 4vw, 2.8rem); }
+        .dept { color: var(--mustard); margin: 6px 0 14px; text-transform: capitalize; }
+        .facts { display: flex; flex-direction: column; gap: 6px; color: var(--text-dim); margin-bottom: 20px; }
+        .facts strong { color: var(--text); margin-right: 6px; }
+        .bio { max-width: 72ch; line-height: 1.6; }
+        .f-card { display: block; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--border); background: var(--charcoal-800); transition: transform .2s, border-color .2s; }
+        .f-card:hover { transform: translateY(-4px); border-color: var(--mustard-deep); }
+        .f-poster img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; }
+        .f-meta { padding: 10px 12px; }
+        .f-title { display: block; font-weight: 600; font-size: 0.9rem; }
+        .f-sub { display: block; font-size: 0.8rem; color: var(--text-dim); margin-top: 2px; }
+        @media (max-width: 820px) { .person { grid-template-columns: 1fr; } .photo { max-width: 260px; } }
+      </style>
+    </BaseLayout>
+  )
+}

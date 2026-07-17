@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PageHeader from '../../components/PageHeader.astro';
+import Rail from '../../components/Rail.astro';
+import { tmdb } from '../../lib/tmdb';
+import { hasCredentials } from '../../lib/config';
+
+let popular = [], topRated = [], upcoming = [], nowPlaying = [], error = null;
+if (hasCredentials) {
+  try {
+    const [a, b, c, d] = await Promise.all([
+      tmdb.moviesPopular(), tmdb.moviesTopRated(), tmdb.moviesUpcoming(), tmdb.moviesNowPlaying(),
+    ]);
+    popular = a.results; topRated = b.results; upcoming = c.results; nowPlaying = d.results;
+  } catch (err) { error = err.message; }
+}
+---
+<BaseLayout title="Movies" description="Browse popular, top rated, upcoming and now-playing films.">
+  <PageHeader eyebrow="Films" title="Movies" sub="From tonight’s box office to all-time greats — explore the full TMDB catalogue." />
+  {error && <div class="container"><div class="empty">{error}</div></div>}
+  <Rail title="Now playing" items={nowPlaying} kind="movie" href="/movies/browse/now_playing" />
+  <Rail title="Popular" items={popular} kind="movie" href="/movies/browse/popular" />
+  <Rail title="Top rated" items={topRated} kind="movie" href="/movies/browse/top_rated" />
+  <Rail title="Upcoming" items={upcoming} kind="movie" href="/movies/browse/upcoming" />
+</BaseLayout>

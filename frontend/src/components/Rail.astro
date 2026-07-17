@@ -1,0 +1,26 @@
+---
+import MediaCarousel from './MediaCarousel.svelte';
+interface Props { title: string; items: any[]; href?: string; kind?: string | null; eyebrow?: string; }
+const { title, items, href, kind = null, eyebrow } = Astro.props;
+---
+{items && items.length > 0 && (
+  <section class="section rail">
+    <div class="container">
+      <div class="section-head">
+        <div class="row" style="gap:0">
+          <span class="accent-bar"></span>
+          <div>
+            {eyebrow && <span class="eyebrow">{eyebrow}</span>}
+            <h2>{title}</h2>
+          </div>
+        </div>
+        {href && <a class="chip" href={href}>See all →</a>}
+      </div>
+      <MediaCarousel client:visible items={items} kind={kind} />
+    </div>
+  </section>
+)}
+<style>
+  .rail { padding: 26px 0; }
+  .section-head .row > div { display: flex; flex-direction: column; }
+</style>

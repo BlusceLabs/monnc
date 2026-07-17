@@ -1,0 +1,53 @@
+---
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+import { SITE } from '../lib/config';
+
+interface Props {
+  title?: string;
+  description?: string;
+  backdrop?: string | null;
+  nav?: boolean;
+  footer?: boolean;
+}
+const { title, description, backdrop, nav = true, footer = true } = Astro.props;
+const fullTitle = title ? `${title} · ${SITE.name}` : `${SITE.name} — ${SITE.tagline}`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description ?? SITE.tagline} />
+    <meta name="theme-color" content="#17181a" />
+    <title>{fullTitle}</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://image.tmdb.org" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    {backdrop && (
+      <div class="page-backdrop" style={`background-image:url(${backdrop})`} aria-hidden="true"></div>
+    )}
+    {nav && <Nav />}
+    <main id="main">
+      <slot />
+    </main>
+    {footer && <Footer />}
+    <style>
+      .page-backdrop {
+        position: fixed; inset: 0; z-index: -1;
+        background-size: cover; background-position: center top;
+        opacity: 0.20; filter: saturate(0.7);
+        mask-image: linear-gradient(180deg, rgba(0,0,0,0.9), transparent 70%);
+      }
+      main { min-height: 60vh; padding-top: var(--nav-h); }
+    </style>
+  </body>
+</html>
