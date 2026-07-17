@@ -516,24 +516,21 @@ def get_movie(
     append: str = "credits,external_ids,watch/providers,videos,recommendations,"
     "similar,reviews,images,keywords,translations,alternative_titles,release_dates",
 ) -> dict:
+    # Prefer the full raw API record when a key is configured: it carries
+    # videos, credits, watch/providers, recommendations, etc. that the
+    # detail page renders. The scrape path only yields a slim record
+    # (name + overview + genre names) and is used as the no-key fallback.
+    if TMDB_API_KEY:
+        d = _api_get(f"/movie/{tmdb_id}", {"append_to_response": append})
+        if d:
+            return d
     d = _scrape_movie(tmdb_id, slug)
     if d:
         return d
     d = _api_get(f"/movie/{tmdb_id}", {"append_to_response": append})
     if not d:
         raise RuntimeError(f"movie {tmdb_id} unavailable from both sources")
-    return {
-        "id": str(d.get("id")), "title": d.get("title"),
-        "original_title": d.get("original_title"),
-        "year": (d.get("release_date") or "")[:4], "overview": d.get("overview"),
-        "genres": [g["name"] for g in d.get("genres", [])],
-        "poster": _img(d.get("poster_path")),
-        "backdrop": _img(d.get("backdrop_path"), "original"),
-        "rating": d.get("vote_average"), "runtime": d.get("runtime"),
-        "imdb_id": (d.get("external_ids") or {}).get("imdb_id"),
-        "cast": [c["name"] for c in (d.get("credits", {}).get("cast") or [])[:15]],
-        "source": "api",
-    }
+    return d
 
 
 def movie_appendages(tmdb_id: str, sub: str) -> dict | list:
@@ -575,24 +572,19 @@ def get_tv(
     "similar,reviews,images,keywords,translations,alternative_titles,"
     "content_ratings,aggregate_credits,season,episode_groups",
 ) -> dict:
+    # Prefer the full raw API record when a key is configured (see
+    # get_movie for the rationale). The scrape path is the no-key fallback.
+    if TMDB_API_KEY:
+        d = _api_get(f"/tv/{tmdb_id}", {"append_to_response": append})
+        if d:
+            return d
     d = _scrape_tv(tmdb_id, slug)
     if d:
         return d
     d = _api_get(f"/tv/{tmdb_id}", {"append_to_response": append})
     if not d:
         raise RuntimeError(f"tv {tmdb_id} unavailable from both sources")
-    return {
-        "id": str(d.get("id")), "name": d.get("name"),
-        "original_name": d.get("original_name"),
-        "year": (d.get("first_air_date") or "")[:4], "overview": d.get("overview"),
-        "genres": [g["name"] for g in d.get("genres", [])],
-        "poster": _img(d.get("poster_path")),
-        "backdrop": _img(d.get("backdrop_path"), "original"),
-        "rating": d.get("vote_average"),
-        "imdb_id": (d.get("external_ids") or {}).get("imdb_id"),
-        "seasons": len(d.get("seasons", [])),
-        "source": "api",
-    }
+    return d
 
 
 def get_tv_seasons(tmdb_id: str) -> list[dict]:

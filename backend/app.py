@@ -209,6 +209,24 @@ async def tmdb_proxy(path: str, request: Request):
             return JSONResponse(_wrap_list(await _run(_tmdb().movie_boards, parts[1])))
         if len(parts) == 2 and parts[0] == "tv" and parts[1] in _TV_BOARDS:
             return JSONResponse(_wrap_list(await _run(_tmdb().tv_boards, parts[1])))
+        if len(parts) == 4 and parts[0] == "tv" and parts[2] == "season":
+            # /api/tmdb/tv/{id}/season/{n} -> raw season object (has `episodes`)
+            try:
+                data = await _run(_tmdb().tv_appendages, parts[1], f"season/{parts[3]}")
+                if not data:
+                    raise HTTPException(status_code=404, detail=f"tv {parts[1]} season {parts[3]} not found")
+                return JSONResponse(data)
+            except HTTPException:
+                raise
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"tmdb.py error: {exc}")
+        if len(parts) == 3 and parts[0] == "tv" and parts[2] == "seasons":
+            # /api/tmdb/tv/{id}/seasons -> list of {season_number, name, ...}
+            try:
+                data = await _run(_tmdb().get_tv_seasons, parts[1])
+                return JSONResponse(data)
+            except Exception as exc:
+                raise HTTPException(status_code=502, detail=f"tmdb.py error: {exc}")
         if len(parts) == 2 and parts[0] in ("movie", "tv"):
             fn = _tmdb().get_movie if parts[0] == "movie" else _tmdb().get_tv
             return JSONResponse(_norm_detail(await _run(fn, parts[1]), parts[0]))

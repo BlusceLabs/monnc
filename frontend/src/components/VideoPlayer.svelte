@@ -14,6 +14,11 @@
   let el;
   let player;
 
+  // React to src changes (e.g. switching episodes) without re-mounting.
+  $: if (player && src) {
+    player.src([{ src, type: guessType(src) }]);
+  }
+
   function guessType(url) {
     if (type) return type;
     if (url.endsWith('.m3u8')) return 'application/x-mpegURL';

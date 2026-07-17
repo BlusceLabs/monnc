@@ -159,6 +159,7 @@ export const tmdb = {
     request(`/tv/${id}/season/${season}/episode/${ep}`), // 56
   tvWatchProviders: (id: number | string) => request(`/tv/${id}/watch/providers`), // 57
   tvExternalIds: (id: number | string) => request(`/tv/${id}/external_ids`), // 58
+  tvSeasons: (id: number | string) => request(`/tv/${id}/seasons`), // 59
 
   /* ------------------------------------------------------------------ *
    * 7. People                                                           *
