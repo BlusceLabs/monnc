@@ -100,7 +100,7 @@ def _tmdb():
 def _norm_card(it: dict) -> dict:
     # Handles both the raw TMDB API shape (poster_path/backdrop_path) and the
     # scrape-normalized shape (poster/backdrop full URLs).
-    poster = it.get("poster_path") or it.get("poster")
+    poster = it.get("poster_path") or it.get("profile_path") or it.get("poster")
     backdrop = it.get("backdrop_path") or it.get("backdrop")
     return {
         "id": _to_int(it.get("id")),

@@ -131,6 +131,9 @@ class Config:
         o.strip() for o in os.environ.get("ALLOWED_ORIGINS", "*").split(",") if o.strip()))
     rate_limit_per_min: int = field(default_factory=lambda: _env_int("RATE_LIMIT_PER_MIN", 600))
 
+    allow_external_targets: bool = field(default_factory=lambda: _env_bool(
+        "PROXY_ALLOW_EXTERNAL_TARGETS", False))
+
     connect_timeout: float = field(default_factory=lambda: _env_float("CONNECT_TIMEOUT", 10.0))
     upstream_http2: bool = field(default_factory=lambda: _env_bool("UPSTREAM_HTTP2", True))
 
@@ -1035,6 +1038,55 @@ def sanitize_path(path: str) -> str:
     return path
 
 
+# Hosts the transcoding proxy is allowed to fetch when acting as a general
+# ?target= gateway. The 111movies/MovieBox pipeline serves real MP4s from
+# these bcdn hosts; everything else is rejected unless external targets are
+# explicitly enabled via PROXY_ALLOW_EXTERNAL_TARGETS.
+_ALLOWED_TARGET_HOSTS = (
+    "bcdn.hakunaymatata.com",
+    "bcdn.hakunaymatata.net",
+    "bcdnlus.hakunaymatata.com",
+    "111movies.net",
+    "player.vidlove.cc",
+)
+
+
+def validate_target(url: str) -> str:
+    """Resolve and validate an explicit ?target= upstream.
+
+    Enforces SSRF guards: only http(s), no private/loopback/link-local IPs,
+    and (unless external targets are enabled) only the allowlisted media
+    hosts. Raises HTTPException on any violation.
+    """
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Invalid target scheme")
+    host = (parsed.hostname or "").lower()
+    if not host:
+        raise HTTPException(status_code=400, detail="Missing target host")
+
+    # Reject obvious internal hosts before any DNS resolution.
+    if host.endswith(".local") or host.endswith(".internal") or host == "localhost":
+        raise HTTPException(status_code=403, detail="Target host not allowed")
+    try:
+        import ipaddress
+
+        ip = ipaddress.ip_address(host)
+        if not ip.is_global:
+            raise HTTPException(status_code=403, detail="Target host not allowed")
+    except ValueError:
+        pass  # hostname, not a literal IP — fine
+
+    if CONFIG.allow_external_targets:
+        return url
+    if any(host == h or host.endswith("." + h) for h in _ALLOWED_TARGET_HOSTS):
+        return url
+    raise HTTPException(
+        status_code=403,
+        detail="Target host not in allowlist; set PROXY_ALLOW_EXTERNAL_TARGETS=true to enable",
+    )
+
+
 HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailer", "transfer-encoding", "upgrade",
@@ -1200,7 +1252,7 @@ async def proxy_route(full_path: str, request: Request) -> Response:
     # external 111movies bcdn hosts) rather than only a fixed MEDIA_SERVER.
     target = request.query_params.get("target")
     if target and urllib.parse.urlparse(target).scheme in ("http", "https"):
-        upstream_url = target
+        upstream_url = validate_target(target)
     else:
         upstream_url = urllib.parse.urljoin(CONFIG.media_server + "/", full_path)
         if request.url.query:

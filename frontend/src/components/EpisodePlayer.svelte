@@ -13,6 +13,7 @@
   let selectedEp = null;
   let src = '';
   let tracks = [];
+  let sources = [];
   let note = '';
   let resolving = false;
 
@@ -49,6 +50,7 @@
     selectedEp = ep;
     resolving = true;
     note = '';
+    sources = [];
     try {
       const res = await fetch(
         `${API_BASE}/api/stream/tv/${tvId}/${ep.season_number}/${ep.episode_number}`
@@ -56,7 +58,13 @@
       if (res.ok) {
         const s = await res.json();
         if (s.stream_url) {
-          src = `${API_BASE}/px?target=${encodeURIComponent(s.stream_url)}`;
+          const proxied = (u) => `${API_BASE}/px?target=${encodeURIComponent(u)}`;
+          src = proxied(s.stream_url);
+          sources = (s.sources || []).map((x) => ({
+            label: x.quality || (x.type ? x.type.toUpperCase() : 'Source'),
+            url: proxied(x.url),
+            type: x.type,
+          }));
           tracks = (s.tracks || []).map((t) => ({
             ...t,
             src: t.src.startsWith('http') ? t.src : `${API_BASE}${t.src}`,
@@ -103,6 +111,7 @@
     <div class="player">
       <VideoPlayer
         src={src}
+        sources={sources}
         poster={selectedEp?.still || ''}
         title={selectedEp ? `S${selectedEp.season_number}·E${selectedEp.episode_number} — ${selectedEp.name}` : ''}
         subtitle={selectedEp?.air_date || ''}

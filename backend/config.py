@@ -54,5 +54,7 @@ PROXY_MEDIA_SERVER = os.environ.get("MEDIA_SERVER", "")
 PROXY_HOST = os.environ.get("PROXY_HOST", "0.0.0.0")
 PROXY_PORT = _env_int("PROXY_PORT", 8080)
 
-# Allow the proxy to fetch arbitrary external origins (the 111movies bcdn URLs).
-PROXY_ALLOW_EXTERNAL_TARGETS = _env_bool("PROXY_ALLOW_EXTERNAL_TARGETS", True)
+# Allow the proxy to fetch arbitrary external origins. Defaults to False so the
+# /px gateway only forwards to the known 111movies/MovieBox bcdn hosts; flip to
+# True for a general-purpose transcoding gateway (SSRF risk — restrict origins).
+PROXY_ALLOW_EXTERNAL_TARGETS = _env_bool("PROXY_ALLOW_EXTERNAL_TARGETS", False)

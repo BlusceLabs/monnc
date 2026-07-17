@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Build output (rebuilt inside the image)
+frontend/dist/
+frontend/.astro/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# VCS / CI
+.git/
+.github/
+
+# Editor / OS
+.DS_Store
+*.log
+.idea/
+.vscode/
