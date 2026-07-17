@@ -14,11 +14,14 @@ RUN npm run build
 FROM python:3.12-slim AS run
 WORKDIR /app
 
-# ffmpeg (transcode) + curl (caddy fallback) + caddy (reverse proxy).
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
+# ffmpeg (transcode) + curl + caddy (reverse proxy, from GitHub releases).
+ARG CADDY_VERSION=2.9.1
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL "https://caddyserver.com/api/v2/linux/amd64?software=http" -o /usr/local/bin/caddy \
-    && chmod +x /usr/local/bin/caddy
+    && curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" -o /tmp/caddy.tar.gz \
+    && tar -xzf /tmp/caddy.tar.gz -C /usr/local/bin caddy \
+    && chmod +x /usr/local/bin/caddy \
+    && rm -f /tmp/caddy.tar.gz
 
 COPY backend/ ./backend/
 COPY frontend/dist/ ./frontend/dist/

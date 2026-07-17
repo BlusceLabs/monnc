@@ -1,0 +1,18 @@
+# Render.com — one-click deploy (uses the repo's Dockerfile).
+# Set PUBLIC_API_BASE to your Render URL, e.g. https://monnc.onrender.com
+services:
+  - type: web
+    name: monnc
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: TMDB_ACCESS_TOKEN
+        sync: false
+      - key: PUBLIC_API_BASE
+        sync: false
+      - key: PROXY_ALLOW_EXTERNAL_TARGETS
+        value: "false"

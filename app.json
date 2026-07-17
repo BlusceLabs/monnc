@@ -1,0 +1,29 @@
+{
+  "name": "monnc",
+  "description": "A cinematic streaming discovery front-end (Astro + Svelte + Video.js) with a Python backend proxying TMDB and serving playable streams.",
+  "repository": "https://github.com/BlusceLabs/monnc",
+  "env": {
+    "TMDB_ACCESS_TOKEN": {
+      "description": "TMDB v4 Read Access Token (preferred) or v3 API key. Stays server-side.",
+      "required": true
+    },
+    "PUBLIC_API_BASE": {
+      "description": "Deployed origin the frontend calls for /api (e.g. https://monnc.herokuapp.com). Inlined at build time.",
+      "required": false
+    },
+    "PROXY_ALLOW_EXTERNAL_TARGETS": {
+      "description": "false (default) restricts /px to known 111movies bcdn hosts; true = general gateway (SSRF risk).",
+      "value": "false",
+      "required": false
+    }
+  },
+  "formation": {
+    "web": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "buildpacks": [
+    { "url": "https://github.com/heroku/heroku-buildpack-docker" }
+  ]
+}

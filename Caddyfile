@@ -1,8 +1,22 @@
 {
+	# On PaaS hosts (Heroku/Railway/Render/Fly/DigitalOcean App Platform) a
+	# single $PORT is injected and TLS is terminated upstream, so we bind that
+	# port and disable automatic HTTPS. On a bare VPS set SITE_DOMAIN to enable
+	# Caddy's automatic HTTPS (it obtains + renews a cert for :443 and redirects
+	# HTTP→HTTPS). The two addresses below share one site definition.
 	admin off
-	auto_https off
+	{$CADDY_GLOBAL}
 }
-:{$PORT:8080} {
+
+# Listen on the injected $PORT (HTTP) so platform health checks pass. When
+# SITE_DOMAIN is set, Caddy ALSO serves automatic HTTPS on :443 for that name.
+# (When SITE_DOMAIN is empty the address is just ":{$PORT}".)
+:{$PORT:8080}{$SITE_ADDR:} {
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
 	handle /px/* {
 		reverse_proxy 127.0.0.1:8028
 	}

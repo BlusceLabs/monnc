@@ -54,19 +54,25 @@ Open <http://localhost:4321>. Every TMDB request goes through the backend
 pipeline and stream it back same-origin via `/px`. Add `?target=<url>` against
 `/px` to route a source through the HEVC→H.264 transcoding proxy.
 
-## Deploy to production (single container)
+## Deploy to production
 
-The repo ships a `Dockerfile` + `Caddyfile` + `deploy/start.sh` that build a
-single image running the backend, the Astro SSR node server, and Caddy as the
-public edge on `$PORT`.
+The repo ships a **single-container** setup (`Dockerfile` + `Caddyfile` +
+`deploy/start.sh`) that runs the backend, the Astro SSR node server, and Caddy
+as the public edge — all on the platform-injected `$PORT`. This works unchanged
+on every host below. Caddy also serves automatic HTTPS on a bare VPS when you
+set `SITE_DOMAIN` (it obtains + renews a Let's Encrypt cert on :443 and
+redirects HTTP→HTTPS, while the `$PORT` listener keeps answering plain HTTP for
+platform health checks).
+
+### One image, every platform
 
 ```bash
-# Build
+# Build (PUBLIC_API_BASE is inlined at build time — use your deployed URL)
 docker build -t monnc \
-  --build-arg PUBLIC_API_BASE=https://your-domain.example \
+  --build-arg PUBLIC_API_BASE=https://monnc.example.com \
   .
 
-# Run (TMDB key + PORT injected at runtime)
+# Run locally / on any VPS
 docker run -d --name monnc \
   -e PORT=8080 \
   -e TMDB_ACCESS_TOKEN=your_v4_token \
@@ -75,7 +81,7 @@ docker run -d --name monnc \
   monnc
 ```
 
-`deploy/start.sh` starts three processes and Caddy routes:
+`deploy/start.sh` starts all three processes and Caddy routes:
 
 | Path       | Destination           |
 | ---------- | --------------------- |
@@ -83,13 +89,98 @@ docker run -d --name monnc \
 | `/px/*`    | backend FastAPI :8028 |
 | everything | Astro SSR node :4321  |
 
-### Required environment (backend)
-| Variable                   | Purpose                                              |
-| -------------------------- | ---------------------------------------------------- |
-| `TMDB_ACCESS_TOKEN` / `TMDB_API_KEY` | TMDB auth (kept server-side)          |
-| `PUBLIC_API_BASE` (build)  | Deployed origin the frontend calls for `/api`       |
-| `PORT`                     | Public port Caddy listens on (default 8080)         |
-| `PROXY_ALLOW_EXTERNAL_TARGETS` | `false` (default) restricts `/px` to known 111movies bcdn hosts; `true` allows any origin (SSRF risk) |
+### Required environment
+| Variable                   | When            | Purpose                                              |
+| -------------------------- | --------------- | ---------------------------------------------------- |
+| `TMDB_ACCESS_TOKEN` / `TMDB_API_KEY` | always | TMDB auth (kept server-side)            |
+| `PUBLIC_API_BASE`          | build arg       | Deployed origin the frontend calls for `/api`       |
+| `PORT`                     | runtime         | Public port Caddy listens on (default 8080)         |
+| `SITE_DOMAIN`              | VPS w/ HTTPS    | e.g. `monnc.example.com` → Caddy auto-TLS on :443   |
+| `PROXY_ALLOW_EXTERNAL_TARGETS` | runtime  | `false` (default) restricts `/px` to known 111movies bcdn hosts; `true` allows any origin (SSRF risk) |
+
+---
+
+### Heroku
+Heroku builds Docker via the included `app.json` + `Procfile`. The `web`
+process runs `deploy/start.sh` and Heroku injects `PORT`.
+
+```bash
+heroku create monnc
+heroku stack:set container
+# Set config vars (NOT in the image):
+heroku config:set TMDB_ACCESS_TOKEN=your_v4_token
+heroku config:set PUBLIC_API_BASE=https://monnc.herokuapp.com
+heroku config:set PROXY_ALLOW_EXTERNAL_TARGETS=false
+git push heroku master
+```
+> `PUBLIC_API_BASE` must match your `*.herokuapp.com` URL. Rebuild the image
+> after changing it (it is baked in at build time). Alternatively use your own
+> domain via Heroku Custom Domains and set `SITE_DOMAIN` + `PUBLIC_API_BASE`.
+
+### Railway
+Railway auto-detects `railway.json` (Docker builder). Set vars in the
+Railway dashboard (or CLI) — `PORT` is injected automatically.
+
+```bash
+railway init
+railway variables set TMDB_ACCESS_TOKEN=your_v4_token \
+  PUBLIC_API_BASE=https://monnc.up.railway.app \
+  PROXY_ALLOW_EXTERNAL_TARGETS=false
+railway up
+```
+
+### Render
+Click *New → Blueprint* and select the repo; `render.yaml` provisions the
+service. Fill in `TMDB_ACCESS_TOKEN` and `PUBLIC_API_BASE` (your `.onrender.com`
+URL) in the dashboard, then deploy. Health check hits `/api/health`.
+
+### Fly.io
+`fly.toml` is included. `PORT` (8080) is injected; the `internal_port` matches.
+
+```bash
+fly launch --no-deploy   # or just: fly deploy
+fly secrets set TMDB_ACCESS_TOKEN=your_v4_token
+fly secrets set PUBLIC_API_BASE=https://monnc.fly.dev
+fly deploy
+# Optional custom domain + auto HTTPS:
+fly certs add monnc.example.com
+fly secrets set SITE_DOMAIN=monnc.example.com PUBLIC_API_BASE=https://monnc.example.com
+```
+
+### DigitalOcean App Platform
+Point it at the repo and choose **Docker** as the type; the included
+`Dockerfile` is used. Add the env vars in the app's *Environment* tab:
+`PORT` (auto), `TMDB_ACCESS_TOKEN`, `PUBLIC_API_BASE` (your
+`https://<app>.ondigitalocean.app` URL), and `PROXY_ALLOW_EXTERNAL_TARGETS=false`.
+The HTTP health check uses `/api/health`.
+
+### DigitalOcean Droplet (VPS / 裸机)
+SSH in, install Docker, then run the image. For HTTPS, point an A record at the
+droplet and set `SITE_DOMAIN` so Caddy obtains a Let's Encrypt cert on :443.
+
+```bash
+# Install Docker (if needed):
+#   curl -fsSL https://get.docker.com | sh
+
+docker run -d --name monnc --restart unless-stopped \
+  -p 80:8080 -p 443:443 \
+  -e PORT=8080 \
+  -e SITE_DOMAIN=monnc.example.com \
+  -e TMDB_ACCESS_TOKEN=your_v4_token \
+  -e PUBLIC_API_BASE=https://monnc.example.com \
+  -e PROXY_ALLOW_EXTERNAL_TARGETS=false \
+  monnc
+```
+> Caddy needs ports 80 & 443 open on the droplet's firewall for the cert
+> handshake. The app itself stays on 127.0.0.1 inside the container; only
+> Caddy is published.
+
+### Any other VPS / generic Docker host
+The same `docker run` as the Droplet works everywhere (Hetzner, Vultr, Linode,
+EC2, bare metal). Set `SITE_DOMAIN` for HTTPS or omit it for plain HTTP behind
+your own reverse proxy / Cloudflare.
+
+---
 
 ## Security notes (production)
 
